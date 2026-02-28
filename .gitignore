@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+*.env
+.venv/
+venv/
+env/
+
+# Large model files
+*.pkl
+*.pt
+*.bin
+models/deep_learning/
+models/classical/*.pkl
+
+# Raw data (too large for git)
+data/raw/
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Chroma vector store
+chroma_db/
+
+# API keys / secrets
+*.key
+secrets.json

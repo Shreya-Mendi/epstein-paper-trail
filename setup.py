@@ -1,0 +1,40 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="paper-trail",
+    version="1.0.0",
+    description="NLP system classifying legal consequences in the Epstein case using public documents.",
+    author="Paper Trail Contributors",
+    python_requires=">=3.10",
+    packages=find_packages(exclude=["data", "models", "notebooks"]),
+    install_requires=[
+        "requests",
+        "beautifulsoup4",
+        "wikipedia-api",
+        "pdfplumber",
+        "PyMuPDF",
+        "spacy",
+        "transformers",
+        "sentence-transformers",
+        "chromadb",
+        "scikit-learn",
+        "fastapi",
+        "uvicorn",
+        "pydantic",
+        "anthropic",
+        "newsapi-python",
+        "torch",
+        "datasets",
+        "evaluate",
+        "pandas",
+        "numpy",
+        "matplotlib",
+        "tqdm",
+        "python-dotenv",
+    ],
+    entry_points={
+        "console_scripts": [
+            "paper-trail=main:main",
+        ],
+    },
+)

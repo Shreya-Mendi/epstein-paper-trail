@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paper Trail — The Documents Don't Lie</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="NLP system classifying legal consequences for individuals named in the Epstein case using public documents." />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-logo">
+      <h1>Paper Trail</h1>
+      <span class="tagline">The Documents Don't Lie</span>
+    </div>
+    <div class="header-actions">
+      <span style="font-size:11px;color:var(--text-muted)">Public records only</span>
+    </div>
+  </header>
+
+  <!-- ── Filter Bar ── -->
+  <div class="filter-bar">
+    <span>Filter:</span>
+    <button class="filter-btn active" data-tier="all">All</button>
+    <button class="filter-btn" data-tier="0">Convicted</button>
+    <button class="filter-btn" data-tier="1">Settled</button>
+    <button class="filter-btn" data-tier="2">Investigated</button>
+    <button class="filter-btn" data-tier="3">No Consequences</button>
+  </div>
+
+  <!-- ── Main Layout ── -->
+  <div class="main-layout">
+    <div class="content-area">
+
+      <!-- Timeline section -->
+      <section class="timeline-section">
+        <h2>Event Timeline</h2>
+        <div class="timeline-scroll">
+          <div class="timeline-track" id="timeline-track">
+            <p style="color:var(--text-muted);padding:20px">Loading timeline…</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- People grid -->
+      <section class="people-section">
+        <h2>Key Individuals</h2>
+        <div class="people-grid" id="people-grid">
+          <p style="color:var(--text-muted)">Loading…</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ── Person Profile Panel ── -->
+  <div class="profile-panel hidden" id="profile-panel">
+    <button class="profile-close" id="profile-close-btn" title="Close">✕</button>
+    <div class="profile-panel-content" id="profile-panel-content">
+      <!-- populated by timeline.js -->
+    </div>
+  </div>
+
+  <!-- ── Chat Toggle Button ── -->
+  <button class="chat-toggle-btn" id="chat-toggle-btn" title="Open chatbot">💬</button>
+
+  <!-- ── Chat Panel ── -->
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-status-dot"></div>
+        <span>Paper Trail AI</span>
+      </div>
+      <button class="chat-close-btn" id="chat-close-btn" title="Close chat">✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <!-- Messages and starter prompts rendered by chat.js -->
+    </div>
+    <div class="chat-input-area">
+      <textarea
+        class="chat-input"
+        id="chat-input"
+        placeholder="Ask about the Epstein case…"
+        rows="1"
+      ></textarea>
+      <button class="chat-send-btn" id="chat-send-btn">Send</button>
+    </div>
+  </div>
+
+  <script src="timeline.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>
