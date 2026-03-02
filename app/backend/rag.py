@@ -77,6 +77,7 @@ def load_corpus_chunks(corpus_path: Path = CORPUS_PATH) -> tuple[list[str], list
                 continue
             record = json.loads(line)
             text = record.get("text", "")
+            meta_extra = record.get("metadata", {}) or {}
             for i, chunk in enumerate(chunk_text(text)):
                 chunks.append(chunk)
                 metadatas.append({
@@ -85,6 +86,10 @@ def load_corpus_chunks(corpus_path: Path = CORPUS_PATH) -> tuple[list[str], list
                     "url": record.get("url", ""),
                     "date": str(record.get("date") or ""),
                     "chunk_index": i,
+                    # DOJ PDF fields (empty string if not a doj_pdf record)
+                    "efta_id": str(meta_extra.get("efta_id", "")),
+                    "dataset": str(meta_extra.get("dataset", "")),
+                    "concern_score": str(meta_extra.get("concern_score", "")),
                 })
 
     log.info("Loaded %d chunks from corpus", len(chunks))
@@ -169,7 +174,7 @@ class RAGPipeline:
             )
         log.info("Indexed %d chunks into ChromaDB", len(chunks))
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
+    def retrieve(self, query: str, top_k: int = 8) -> list[dict]:
         """Retrieve the top-k most relevant chunks for a query.
 
         Args:
@@ -183,27 +188,42 @@ class RAGPipeline:
         embedder = self._get_embedder()
 
         q_emb = embedder.encode([query]).tolist()
+        # Fetch a larger candidate pool, then select the best mix
+        n_candidates = min(top_k * 4, collection.count() or 1)
         results = collection.query(
             query_embeddings=q_emb,
-            n_results=min(top_k, collection.count() or 1),
+            n_results=n_candidates,
             include=["documents", "metadatas", "distances"],
         )
 
-        retrieved = []
+        all_chunks = []
         docs = results.get("documents", [[]])[0]
         metas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
         for doc, meta, dist in zip(docs, metas, distances):
-            retrieved.append({
+            all_chunks.append({
                 "text": doc,
                 "source": meta.get("source", ""),
                 "url": meta.get("url", ""),
                 "date": meta.get("date", ""),
-                "score": round(1 - dist, 4),  # cosine similarity
+                "score": round(1 - dist, 4),
+                "efta_id": meta.get("efta_id", ""),
+                "dataset": meta.get("dataset", ""),
+                "concern_score": meta.get("concern_score", ""),
             })
 
-        return retrieved
+        # Prefer diversity: ensure DOJ PDF chunks appear if they exist in candidates
+        doj_chunks = [c for c in all_chunks if c["source"] == "doj_pdf"]
+        other_chunks = [c for c in all_chunks if c["source"] != "doj_pdf"]
+
+        # Take top DOJ chunks (up to half of top_k) + top other chunks to fill
+        n_doj = min(len(doj_chunks), max(1, top_k // 2))
+        n_other = top_k - n_doj
+        retrieved = doj_chunks[:n_doj] + other_chunks[:n_other]
+        # Re-sort by score so Claude gets best context first
+        retrieved.sort(key=lambda c: c["score"], reverse=True)
+        return retrieved[:top_k]
 
     def generate(self, query: str, context_chunks: list[dict]) -> dict:
         """Generate a response using Claude with retrieved context.
@@ -230,19 +250,30 @@ class RAGPipeline:
 
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
         )
 
         answer = response.content[0].text if response.content else ""
-        sources = [
-            {"index": i + 1, "source": c["source"], "url": c["url"], "date": c["date"]}
-            for i, c in enumerate(context_chunks)
-        ]
+        sources = []
+        for i, c in enumerate(context_chunks):
+            src: dict = {
+                "index": i + 1,
+                "source": c["source"],
+                "url": c["url"],
+                "date": c["date"],
+            }
+            # Enrich DOJ PDF sources with EFTA document citation
+            if c.get("efta_id"):
+                src["efta_id"] = c["efta_id"]
+                src["dataset"] = c["dataset"]
+                # First 120 chars of the retrieved chunk as quote preview
+                src["quote"] = c["text"][:120].replace("\n", " ").strip()
+            sources.append(src)
         return {"answer": answer, "sources": sources}
 
-    def query(self, question: str, top_k: int = 5) -> dict:
+    def query(self, question: str, top_k: int = 8) -> dict:
         """End-to-end RAG: retrieve then generate.
 
         Args:

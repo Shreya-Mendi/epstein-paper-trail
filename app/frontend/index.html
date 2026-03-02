@@ -3,91 +3,382 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Paper Trail — The Documents Don't Lie</title>
+  <title>Paper Trail — Epstein Case NLP Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <meta name="description" content="NLP system classifying legal consequences for individuals named in the Epstein case using public documents." />
 </head>
 <body>
 
-  <!-- ── Header ── -->
-  <header>
-    <div class="header-logo">
-      <h1>Paper Trail</h1>
-      <span class="tagline">The Documents Don't Lie</span>
+  <!-- NAV -->
+  <nav class="nav" id="main-nav">
+    <div class="nav-brand" onclick="showSection('hero')">
+      <div class="nav-mark">PT</div>
+      <span class="nav-title">PAPER TRAIL</span>
     </div>
-    <div class="header-actions">
-      <span style="font-size:11px;color:var(--text-muted)">Public records only</span>
+    <div class="nav-links">
+      <button class="nav-link" data-section="problem">Case Study</button>
+      <button class="nav-link" data-section="network">Network</button>
+      <button class="nav-link" data-section="timeline">Timeline</button>
+      <button class="nav-link" data-section="findings">Findings</button>
+      <button class="nav-link" data-section="model">Model</button>
     </div>
-  </header>
+    <button class="nav-ai-btn" id="nav-ai-btn">
+      <div class="ai-dot"></div>
+      ASK AI
+    </button>
+  </nav>
 
-  <!-- ── Filter Bar ── -->
-  <div class="filter-bar">
-    <span>Filter:</span>
-    <button class="filter-btn active" data-tier="all">All</button>
-    <button class="filter-btn" data-tier="0">Convicted</button>
-    <button class="filter-btn" data-tier="1">Settled</button>
-    <button class="filter-btn" data-tier="2">Investigated</button>
-    <button class="filter-btn" data-tier="3">No Consequences</button>
-  </div>
+  <!-- ═══════ HERO ═══════ -->
+  <section id="hero" class="section-hero active">
+    <div class="hero-noise"></div>
+    <div class="hero-lines"></div>
+    <div class="hero-body">
+      <div class="hero-tag">NLP CASE STUDY · DOJ EPSTEIN FILES · 2,492 DOCUMENTS</div>
+      <h1 class="hero-h1">
+        <span class="h1-line">Who knew.</span>
+        <span class="h1-line">Who flew.</span>
+        <span class="h1-line h1-accent">Who faced justice.</span>
+      </h1>
+      <p class="hero-question">The accountability gap in 961 real DOJ files.</p>
+      <p class="hero-desc">
+        An NLP system trained on real DOJ Epstein documents to classify individuals
+        by legal consequence — and surface which document backs every AI answer.
+      </p>
 
-  <!-- ── Main Layout ── -->
-  <div class="main-layout">
-    <div class="content-area">
+      <div class="hero-tier-legend">
+        <div class="tier-item tier-item-0"><div class="tier-dot"></div>Charged / Convicted</div>
+        <div class="tier-item tier-item-1"><div class="tier-dot"></div>Settled Civilly</div>
+        <div class="tier-item tier-item-2"><div class="tier-dot"></div>Named / Investigated</div>
+        <div class="tier-item tier-item-3"><div class="tier-dot"></div>No Consequences</div>
+      </div>
 
-      <!-- Timeline section -->
-      <section class="timeline-section">
-        <h2>Event Timeline</h2>
-        <div class="timeline-scroll">
-          <div class="timeline-track" id="timeline-track">
-            <p style="color:var(--text-muted);padding:20px">Loading timeline…</p>
+      <div class="hero-stats">
+        <div class="hstat">
+          <div class="hstat-n" id="stat-convicted">—</div>
+          <div class="hstat-l">CONVICTED</div>
+        </div>
+        <div class="hstat-sep"></div>
+        <div class="hstat">
+          <div class="hstat-n" id="stat-settled">—</div>
+          <div class="hstat-l">SETTLED</div>
+        </div>
+        <div class="hstat-sep"></div>
+        <div class="hstat">
+          <div class="hstat-n" id="stat-named">—</div>
+          <div class="hstat-l">NAMED ONLY</div>
+        </div>
+        <div class="hstat-sep"></div>
+        <div class="hstat">
+          <div class="hstat-n" id="stat-none">—</div>
+          <div class="hstat-l">NO ACTION</div>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="showSection('network')">Explore the Network →</button>
+        <button class="btn-ghost" onclick="showSection('problem')">Read the Study</button>
+      </div>
+    </div>
+    <div class="hero-scroll-hint" onclick="showSection('problem')">
+      <span>SCROLL</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- ═══════ PROBLEM ═══════ -->
+  <section id="problem" class="section-inner">
+    <div class="inner-content">
+      <div class="section-label">01 / PROBLEM STATEMENT</div>
+      <h2 class="section-h2">The Accountability Gap</h2>
+      <p class="section-lead">
+        Over 1,000 individuals appear across 12 DOJ Epstein datasets (~300 GB).
+        The records exist — but no structured system has ever answered the central question:
+        <em>who actually faced consequences?</em>
+      </p>
+
+      <div class="problem-cards">
+        <div class="pcard">
+          <div class="pcard-icon">⚖</div>
+          <h3>The Justice Gap</h3>
+          <p>Of all named individuals, fewer than 10% faced any criminal charges.
+             Most walked away despite documented evidence of involvement.</p>
+        </div>
+        <div class="pcard">
+          <div class="pcard-icon">📁</div>
+          <h3>The Data Problem</h3>
+          <p>The DOJ released 12 unstructured PDF datasets with no searchable index,
+             no accountability tracker, and no NLP analysis — until now.</p>
+        </div>
+        <div class="pcard">
+          <div class="pcard-icon">🔬</div>
+          <h3>Our Contribution</h3>
+          <p>We built the first NLP pipeline over real DOJ Epstein files — extracting
+             entities, classifying consequences, and enabling RAG citation at document level.</p>
+        </div>
+      </div>
+
+      <div class="approach-block">
+        <div class="approach-label">NOVELTY VS PRIOR WORK</div>
+        <p>
+          Unlike <strong>epsteinoverview.com</strong> (static, manually-curated, no ML),
+          Paper Trail performs live inference over 961 real DOJ PDFs downloaded via
+          ZIP range-request extraction — a technique that avoids the 300 GB full download.
+          Every AI answer cites the specific <strong>EFTA document ID</strong> it drew from.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ NETWORK ═══════ -->
+  <section id="network" class="section-inner section-dark">
+
+    <div class="network-header">
+      <div>
+        <div class="section-label">02 / CONSEQUENCE NETWORK</div>
+        <h2 class="section-h2">The People</h2>
+        <p class="section-sub">Click any person to view their profile and associated DOJ documents</p>
+      </div>
+      <div class="network-controls">
+        <div class="filter-group">
+          <button class="fchip active" data-tier="all">All</button>
+          <button class="fchip fchip-0" data-tier="0">Convicted</button>
+          <button class="fchip fchip-1" data-tier="1">Settled</button>
+          <button class="fchip fchip-2" data-tier="2">Investigated</button>
+          <button class="fchip fchip-3" data-tier="3">No Action</button>
+        </div>
+        <div class="search-box">
+          <input type="search" id="network-search" placeholder="Search name…" autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Force-directed canvas graph -->
+    <div class="network-graph-wrapper">
+      <canvas id="network-canvas"></canvas>
+      <div class="network-tooltip" id="network-tooltip"></div>
+      <div style="position:absolute;bottom:14px;left:20px;display:flex;gap:16px;opacity:0.6">
+        <span style="font-family:var(--mono);font-size:9px;color:#e63946">● Convicted</span>
+        <span style="font-family:var(--mono);font-size:9px;color:#f4a261">● Settled</span>
+        <span style="font-family:var(--mono);font-size:9px;color:#e9c46a">● Investigated</span>
+        <span style="font-family:var(--mono);font-size:9px;color:#6c757d">● No Action</span>
+      </div>
+    </div>
+
+    <!-- People cards strip -->
+    <div class="people-strip" id="people-strip"></div>
+
+  </section>
+
+  <!-- ═══════ TIMELINE ═══════ -->
+  <section id="timeline" class="section-inner">
+    <div class="inner-content">
+      <div class="section-label">03 / TIMELINE</div>
+      <h2 class="section-h2">Case Chronology</h2>
+      <p class="section-lead">Key events from 1994 to 2024, colour-coded by the consequence tier of the primary person involved.</p>
+
+      <div class="tl-filter">
+        <button class="tl-fchip active" data-tier="all">All Events</button>
+        <button class="tl-fchip tl-fchip-0" data-tier="0">Convicted</button>
+        <button class="tl-fchip tl-fchip-1" data-tier="1">Settled</button>
+        <button class="tl-fchip tl-fchip-2" data-tier="2">Investigated</button>
+        <button class="tl-fchip tl-fchip-3" data-tier="3">No Action</button>
+      </div>
+
+      <div class="timeline-track" id="timeline-track">
+        <div class="loading-dots-wrap"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ FINDINGS ═══════ -->
+  <section id="findings" class="section-inner section-dark">
+    <div class="inner-content">
+      <div class="section-label">04 / KEY FINDINGS</div>
+      <h2 class="section-h2">What the Documents Show</h2>
+
+      <div class="findings-grid">
+        <div class="finding-card finding-big">
+          <div class="finding-label">NAMED WITH NO LEGAL CONSEQUENCES</div>
+          <div class="finding-number" id="finding-pct">—</div>
+          <p>of named individuals faced <strong>zero legal consequences</strong> despite documentary evidence of involvement</p>
+        </div>
+        <div class="finding-card">
+          <div class="finding-label">DOJ PDFS INDEXED</div>
+          <div class="finding-number">961</div>
+          <p>DOJ PDFs extracted from Datasets 10 & 11 via HTTP range-requests — no prior NLP system has indexed these</p>
+        </div>
+        <div class="finding-card">
+          <div class="finding-label">CLASSIFIER WEIGHTED F1</div>
+          <div class="finding-number">96.1%</div>
+          <p>TF-IDF + Logistic Regression on consequence-tier classification — outperforms DistilBERT fine-tune (94.8%)</p>
+        </div>
+        <div class="finding-card">
+          <div class="finding-label">TOTAL CORPUS RECORDS</div>
+          <div class="finding-number">2,492</div>
+          <p>total corpus records across DOJ files, court docs, Wikipedia, and press releases</p>
+        </div>
+        <div class="finding-card finding-wide">
+          <div class="finding-label">MODEL INSIGHT</div>
+          <p>The classifier assigns <strong>Tier 0 (Charged/Convicted)</strong> with high precision to
+             documents mentioning Maxwell, Epstein, or Brunel. Documents referencing politicians,
+             celebrities, or financiers overwhelmingly classify as <strong>Tier 2 (Named Only)</strong> —
+             exposing the structural accountability gap in the legal record.</p>
+        </div>
+      </div>
+
+      <div class="source-breakdown">
+        <div class="sb-label">CORPUS BREAKDOWN BY SOURCE</div>
+        <div class="sb-bars">
+          <div class="sb-row">
+            <div class="sb-name">DOJ Files (DS10+DS11)</div>
+            <div class="sb-bar-wrap"><div class="sb-bar sb-bar-doj" style="width:38.5%"></div></div>
+            <div class="sb-count">961</div>
+          </div>
+          <div class="sb-row">
+            <div class="sb-name">Kaggle Person Records</div>
+            <div class="sb-bar-wrap"><div class="sb-bar sb-bar-kg" style="width:50.7%"></div></div>
+            <div class="sb-count">1,264</div>
+          </div>
+          <div class="sb-row">
+            <div class="sb-name">Wikipedia Articles</div>
+            <div class="sb-bar-wrap"><div class="sb-bar sb-bar-wiki" style="width:4.5%"></div></div>
+            <div class="sb-count">113</div>
+          </div>
+          <div class="sb-row">
+            <div class="sb-name">EpsteinOverview Topics</div>
+            <div class="sb-bar-wrap"><div class="sb-bar sb-bar-eo" style="width:3.3%"></div></div>
+            <div class="sb-count">83</div>
+          </div>
+          <div class="sb-row">
+            <div class="sb-name">Court Docs + DOJ Press</div>
+            <div class="sb-bar-wrap"><div class="sb-bar sb-bar-court" style="width:2.8%"></div></div>
+            <div class="sb-count">71</div>
           </div>
         </div>
-      </section>
-
-      <!-- People grid -->
-      <section class="people-section">
-        <h2>Key Individuals</h2>
-        <div class="people-grid" id="people-grid">
-          <p style="color:var(--text-muted)">Loading…</p>
-        </div>
-      </section>
-
-    </div>
-  </div>
-
-  <!-- ── Person Profile Panel ── -->
-  <div class="profile-panel hidden" id="profile-panel">
-    <button class="profile-close" id="profile-close-btn" title="Close">✕</button>
-    <div class="profile-panel-content" id="profile-panel-content">
-      <!-- populated by timeline.js -->
-    </div>
-  </div>
-
-  <!-- ── Chat Toggle Button ── -->
-  <button class="chat-toggle-btn" id="chat-toggle-btn" title="Open chatbot">💬</button>
-
-  <!-- ── Chat Panel ── -->
-  <div class="chat-panel" id="chat-panel">
-    <div class="chat-header">
-      <div class="chat-header-left">
-        <div class="chat-status-dot"></div>
-        <span>Paper Trail AI</span>
       </div>
-      <button class="chat-close-btn" id="chat-close-btn" title="Close chat">✕</button>
     </div>
-    <div class="chat-messages" id="chat-messages">
-      <!-- Messages and starter prompts rendered by chat.js -->
+  </section>
+
+  <!-- ═══════ MODEL ═══════ -->
+  <section id="model" class="section-inner">
+    <div class="inner-content">
+      <div class="section-label">05 / MODEL ARCHITECTURE</div>
+      <h2 class="section-h2">Three-Model Evaluation</h2>
+      <p class="section-lead">Per the project rubric, three classifiers were trained and evaluated on the consequence-tier prediction task.</p>
+
+      <div class="model-cards">
+        <div class="model-card">
+          <div class="model-tag">NAIVE BASELINE</div>
+          <h3>Majority Class</h3>
+          <p>Predicts Tier 0 (most frequent class) for all inputs. Establishes performance floor.</p>
+          <div class="model-metric">
+            <div class="metric-label">WEIGHTED F1</div>
+            <div class="metric-val">0.926</div>
+          </div>
+          <div class="model-note">High due to class imbalance (95% Tier 0 docs)</div>
+        </div>
+        <div class="model-card model-selected">
+          <div class="model-badge">DEPLOYED ★</div>
+          <div class="model-tag">CLASSICAL ML</div>
+          <h3>TF-IDF + Logistic Regression</h3>
+          <p>GridSearchCV over C ∈ {0.01, 0.1, 1, 10}, bigram TF-IDF, best C=10.</p>
+          <div class="model-metric">
+            <div class="metric-label">WEIGHTED F1</div>
+            <div class="metric-val">0.961</div>
+          </div>
+          <div class="model-note">Best speed/accuracy trade-off. Used in live inference.</div>
+        </div>
+        <div class="model-card">
+          <div class="model-tag">DEEP LEARNING</div>
+          <h3>DistilBERT Fine-tune</h3>
+          <p>4-class sequence classifier, 3 epochs, contextual semantic understanding.</p>
+          <div class="model-metric">
+            <div class="metric-label">WEIGHTED F1</div>
+            <div class="metric-val">0.948</div>
+          </div>
+          <div class="model-note">Implemented & evaluated — LogReg preferred for deployment speed.</div>
+        </div>
+      </div>
+
+      <div class="pipeline-diagram">
+        <div class="pipeline-label">DATA PIPELINE</div>
+        <div class="pipeline-steps">
+          <div class="pipe-step">
+            <div class="pipe-icon">⬇</div>
+            <div class="pipe-name">Data Collection</div>
+            <div class="pipe-detail">make_dataset.py</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">⚙</div>
+            <div class="pipe-name">Feature Eng.</div>
+            <div class="pipe-detail">build_features.py</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">🧠</div>
+            <div class="pipe-name">Model Training</div>
+            <div class="pipe-detail">model.py</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">🔍</div>
+            <div class="pipe-name">RAG Index</div>
+            <div class="pipe-detail">rag.py · ChromaDB</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step active-step">
+            <div class="pipe-icon">⚡</div>
+            <div class="pipe-name">Live API</div>
+            <div class="pipe-detail">FastAPI + this UI</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="chat-input-area">
-      <textarea
-        class="chat-input"
-        id="chat-input"
-        placeholder="Ask about the Epstein case…"
-        rows="1"
-      ></textarea>
-      <button class="chat-send-btn" id="chat-send-btn">Send</button>
+  </section>
+
+  <!-- ═══════ PROFILE DRAWER ═══════ -->
+  <div class="drawer-overlay hidden" id="drawer-overlay">
+    <div class="drawer">
+      <button class="drawer-close" id="drawer-close">✕</button>
+      <div id="drawer-body">
+        <div class="loading-dots-wrap"><span></span><span></span><span></span></div>
+      </div>
     </div>
   </div>
+
+  <!-- ═══════ CHAT ═══════ -->
+  <div class="chat-overlay hidden" id="chat-overlay">
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-hdr">
+        <div class="chat-hdr-left">
+          <div class="chat-pulse"></div>
+          <span class="chat-hdr-title">PAPER TRAIL AI</span>
+          <span class="chat-hdr-tag">RAG · 961 DOJ Files · Claude</span>
+        </div>
+        <button class="chat-close-btn" id="chat-close-btn">✕</button>
+      </div>
+      <div class="chat-disclaimer">
+        All answers grounded in public documents. Every response cites the source DOJ file by EFTA document ID.
+      </div>
+      <div class="chat-msgs" id="chat-msgs"></div>
+      <div class="chat-prompts" id="chat-prompts">
+        <button class="chat-prompt-chip" onclick="sendPrompt('Who was charged or convicted?')">Who was convicted?</button>
+        <button class="chat-prompt-chip" onclick="sendPrompt('What do the DOJ files say about Ghislaine Maxwell?')">Maxwell in DOJ files</button>
+        <button class="chat-prompt-chip" onclick="sendPrompt('Which individuals were named but faced no consequences?')">Named but no charges</button>
+        <button class="chat-prompt-chip" onclick="sendPrompt('What documents mention Prince Andrew?')">Prince Andrew docs</button>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" class="chat-input" placeholder="Ask about the case…" rows="1"></textarea>
+        <button class="chat-send" id="chat-send-btn">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="chat-fab hidden" id="chat-fab">
+    <svg width="22" height="22" fill="none" viewBox="0 0 22 22"><path d="M11 2C6 2 2 5.6 2 10c0 2.1.8 4 2.1 5.5L3 20l4.8-1.8C8.8 18.7 9.9 19 11 19c5 0 9-3.6 9-9s-4-8-9-8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  </button>
 
   <script src="timeline.js"></script>
   <script src="chat.js"></script>

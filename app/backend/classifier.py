@@ -2,7 +2,11 @@
 classifier.py — Consequence tier classifier for Paper Trail API.
 
 Loads the trained logistic regression model (or falls back to the label lookup)
-and exposes a predict() function for use in the FastAPI backend.
+and exposes predict functions for use in the FastAPI backend.
+
+The label lookup now carries richer per-person metadata:
+  tier, bio, category, flights, documents, connections,
+  in_black_book, nationality, photo_url
 """
 
 import json
@@ -10,7 +14,6 @@ import logging
 import pickle
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -25,20 +28,16 @@ TIER_NAMES = {
 }
 
 TIER_COLORS = {
-    0: "#e63946",   # red
-    1: "#f4a261",   # amber
-    2: "#e9c46a",   # yellow
-    3: "#6c757d",   # grey
+    0: "#e63946",
+    1: "#f4a261",
+    2: "#e9c46a",
+    3: "#6c757d",
 }
 
 
 @lru_cache(maxsize=1)
 def _load_model():
-    """Load and cache the trained logistic regression model.
-
-    Returns:
-        Fitted sklearn Pipeline, or None if the model file is missing.
-    """
+    """Load and cache the trained logistic regression model."""
     if not LOGREG_PATH.exists():
         log.warning("LogReg model not found at %s — using label lookup only.", LOGREG_PATH)
         return None
@@ -49,11 +48,12 @@ def _load_model():
 
 
 @lru_cache(maxsize=1)
-def _load_label_lookup() -> dict[str, int]:
-    """Load and cache the hand-labeled consequence lookup table.
+def _load_label_lookup() -> dict:
+    """Load and cache the consequence label lookup.
 
     Returns:
-        Dict mapping person name (str) to tier int.
+        Dict mapping person name -> metadata dict (tier, bio, photo_url, …)
+        OR legacy int (for backwards compatibility with old label files).
     """
     if not LABELS_PATH.exists():
         return {}
@@ -62,16 +62,42 @@ def _load_label_lookup() -> dict[str, int]:
     return data.get("labels", {})
 
 
+def _person_entry(name: str, raw) -> dict:
+    """Normalise a label entry into a full person dict.
+
+    Args:
+        name: Person's name.
+        raw: Either an int tier (legacy) or a metadata dict.
+
+    Returns:
+        Full person dict with name, tier, label, color, and optional extras.
+    """
+    if isinstance(raw, int):
+        tier = raw
+        extras = {}
+    else:
+        tier = raw.get("tier", 2)
+        extras = {k: v for k, v in raw.items() if k != "tier"}
+
+    return {
+        "name": name,
+        "tier": tier,
+        "label": TIER_NAMES.get(tier, "Unknown"),
+        "color": TIER_COLORS.get(tier, "#888"),
+        **extras,
+    }
+
+
 def predict_from_text(text: str) -> dict:
     """Predict consequence tier from a text excerpt.
 
-    Prefers the trained model if available; falls back to majority class (tier 2).
+    Prefers the trained model if available; falls back to tier 2.
 
     Args:
         text: Document text excerpt.
 
     Returns:
-        Dict with 'tier' (int), 'label' (str), and 'color' (hex str).
+        Dict with tier, label, color.
     """
     model = _load_model()
     if model is not None:
@@ -81,7 +107,7 @@ def predict_from_text(text: str) -> dict:
             log.warning("Model prediction failed: %s", exc)
             tier = 2
     else:
-        tier = 2  # default: Named/Investigated Only
+        tier = 2
 
     return {
         "tier": tier,
@@ -91,47 +117,37 @@ def predict_from_text(text: str) -> dict:
 
 
 def predict_for_person(name: str) -> dict:
-    """Look up the known consequence tier for a named individual.
+    """Look up the known consequence tier and metadata for a named individual.
 
     Args:
-        name: Full name of the person (case-insensitive partial match supported).
+        name: Full name (case-insensitive partial match supported).
 
     Returns:
-        Dict with 'tier', 'label', 'color', and 'name'.
+        Full person dict.
     """
     lookup = _load_label_lookup()
-    # Exact match first, then case-insensitive partial match
-    tier = lookup.get(name)
-    if tier is None:
-        name_lower = name.lower()
-        for key, t in lookup.items():
-            if key.lower() in name_lower or name_lower in key.lower():
-                tier = t
-                break
-    if tier is None:
-        tier = 2  # default
+    raw = lookup.get(name)
 
-    return {
-        "name": name,
-        "tier": tier,
-        "label": TIER_NAMES.get(tier, "Unknown"),
-        "color": TIER_COLORS.get(tier, "#888"),
-    }
+    if raw is None:
+        name_lower = name.lower()
+        for key, val in lookup.items():
+            if key.lower() in name_lower or name_lower in key.lower():
+                raw = val
+                break
+
+    if raw is None:
+        raw = 2  # default tier
+
+    return _person_entry(name, raw)
 
 
 def get_all_labeled_persons() -> list[dict]:
-    """Return all persons from the consequence label lookup with their tiers.
+    """Return all persons from the label lookup with full metadata.
 
     Returns:
-        List of dicts with 'name', 'tier', 'label', 'color'.
+        List of person dicts sorted by tier then name.
     """
     lookup = _load_label_lookup()
-    return [
-        {
-            "name": name,
-            "tier": tier,
-            "label": TIER_NAMES.get(tier, "Unknown"),
-            "color": TIER_COLORS.get(tier, "#888"),
-        }
-        for name, tier in sorted(lookup.items(), key=lambda x: (x[1], x[0]))
-    ]
+    persons = [_person_entry(name, raw) for name, raw in lookup.items()]
+    persons.sort(key=lambda p: (p["tier"], p["name"]))
+    return persons

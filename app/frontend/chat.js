@@ -1,125 +1,87 @@
 /**
- * chat.js — Slide-in chatbot panel for Paper Trail.
+ * chat.js — Paper Trail AI chat panel.
  *
- * Features:
- *  - Slide-in panel from the right side of the screen
- *  - Sends POST /chat requests to the FastAPI backend
- *  - Streams-style progressive rendering of responses
- *  - Source document citations rendered as clickable chips
- *  - Starter prompt suggestions shown on load
- *  - prefillQuery() exposed on window.chatModule for cross-module calls
+ * Sends POST /chat to the FastAPI RAG backend.
+ * Renders answers with markdown-like formatting and EFTA document citation chips.
  */
 
 const CHAT_API = "http://127.0.0.1:8000/chat";
 
-const STARTER_PROMPTS = [
-  "Who faced criminal charges?",
-  "What happened to Ghislaine Maxwell?",
-  "What was the 2008 plea deal?",
-  "Which politicians were named in documents?",
-  "Who settled civil lawsuits?",
-];
+let chatReady = false;
 
-let chatOpen = false;
-let isLoading = false;
+// ─────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// DOM refs (populated on DOMContentLoaded)
-// ---------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  const sendBtn = document.getElementById("chat-send-btn");
+  const input   = document.getElementById("chat-input");
+  const closeBtn = document.getElementById("chat-close-btn");
+  const overlay  = document.getElementById("chat-overlay");
 
-let chatPanel, chatMessages, chatInput, chatSendBtn, chatToggleBtn;
+  if (!sendBtn || !input) return;
 
-// ---------------------------------------------------------------------------
-// Panel open / close
-// ---------------------------------------------------------------------------
+  sendBtn.addEventListener("click", handleSend);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  });
 
-function openChat() {
-  chatOpen = true;
-  chatPanel.classList.add("open");
-  chatToggleBtn.innerHTML = "✕";
-  chatInput.focus();
-}
+  closeBtn?.addEventListener("click", closeChat);
+  overlay?.addEventListener("click", e => {
+    if (e.target === overlay) closeChat();
+  });
+
+  // Show welcome message
+  appendWelcome();
+  chatReady = true;
+});
 
 function closeChat() {
-  chatOpen = false;
-  chatPanel.classList.remove("open");
-  chatToggleBtn.innerHTML = "💬";
+  document.getElementById("chat-overlay")?.classList.add("hidden");
+  document.body.style.overflow = "";
 }
 
-function toggleChat() {
-  if (chatOpen) closeChat();
-  else openChat();
+function appendWelcome() {
+  const msgs = document.getElementById("chat-msgs");
+  if (!msgs) return;
+  const div = document.createElement("div");
+  div.className = "bubble bubble-ai";
+  div.innerHTML = `
+    <div class="bubble-label">PAPER TRAIL AI</div>
+    <div class="bubble-text">
+      <p>Ask me anything about the Epstein case. I search <strong>961 DOJ files</strong> and cite the specific document behind every answer.</p>
+      <p style="color:var(--text-3);font-size:12px;margin-top:8px">Try: "What do the DOJ files say about Ghislaine Maxwell?" or "Who was charged?"</p>
+    </div>
+  `;
+  msgs.appendChild(div);
 }
 
-// ---------------------------------------------------------------------------
-// Message rendering
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// SEND
+// ─────────────────────────────────────────────────────────────────
 
-function appendBubble(role, text, sources = []) {
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble ${role}`;
+async function handleSend() {
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("chat-send-btn");
+  if (!input) return;
 
-  // Escape and linkify newlines
-  const escaped = escapeHTML(text).replace(/\n/g, "<br>");
-  bubble.innerHTML = escaped;
+  const query = input.value.trim();
+  if (!query) return;
 
-  if (sources.length > 0) {
-    const sourceRow = document.createElement("div");
-    sourceRow.className = "chat-sources";
-    sources.forEach(src => {
-      const chip = document.createElement("a");
-      chip.className = "source-chip";
-      chip.textContent = `[${src.index}] ${src.source}`;
-      if (src.url) {
-        chip.href = src.url;
-        chip.target = "_blank";
-        chip.rel = "noopener noreferrer";
-      } else {
-        chip.href = "#";
-      }
-      chip.title = src.url || src.source;
-      sourceRow.appendChild(chip);
-    });
-    bubble.appendChild(sourceRow);
-  }
+  input.value = "";
+  input.style.height = "auto";
 
-  chatMessages.appendChild(bubble);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  return bubble;
-}
+  // Hide prompt chips after first use
+  const prompts = document.getElementById("chat-prompts");
+  if (prompts) prompts.style.display = "none";
 
-function showTypingIndicator() {
-  const indicator = document.createElement("div");
-  indicator.className = "chat-typing";
-  indicator.id = "chat-typing";
-  indicator.innerHTML = "<span></span><span></span><span></span>";
-  chatMessages.appendChild(indicator);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function removeTypingIndicator() {
-  const indicator = document.getElementById("chat-typing");
-  if (indicator) indicator.remove();
-}
-
-// ---------------------------------------------------------------------------
-// Send a message
-// ---------------------------------------------------------------------------
-
-async function sendMessage(query) {
-  if (!query.trim() || isLoading) return;
-
-  // Hide starter prompts after first message
-  const starters = document.getElementById("starter-prompts");
-  if (starters) starters.remove();
-
-  appendBubble("user", query);
-  chatInput.value = "";
-  chatInput.style.height = "auto";
-
-  isLoading = true;
-  chatSendBtn.disabled = true;
-  showTypingIndicator();
+  appendUserBubble(query);
+  const thinkingEl = appendThinking();
+  if (sendBtn) sendBtn.disabled = true;
 
   try {
     const res = await fetch(CHAT_API, {
@@ -128,125 +90,125 @@ async function sendMessage(query) {
       body: JSON.stringify({ query }),
     });
 
-    removeTypingIndicator();
-
-    if (!res.ok) {
-      const err = await res.text();
-      appendBubble("assistant", `Error ${res.status}: ${err}`);
-      return;
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    appendBubble("assistant", data.answer || "(No response)", data.sources || []);
+    thinkingEl.remove();
+    appendAIBubble(data.answer, data.sources || []);
   } catch (err) {
-    removeTypingIndicator();
-    appendBubble(
-      "assistant",
-      "⚠ Could not reach the Paper Trail backend. Make sure it's running:\n\nuvicorn app.backend.main:app --reload"
+    thinkingEl.remove();
+    appendAIBubble(
+      "Could not reach the Paper Trail backend. Make sure it is running:\n\n```\nPYTHONPATH=app/backend uvicorn app.backend.main:app --reload\n```",
+      []
     );
-    console.error("Chat request failed:", err);
   } finally {
-    isLoading = false;
-    chatSendBtn.disabled = false;
-    chatInput.focus();
+    if (sendBtn) sendBtn.disabled = false;
+    input.focus();
   }
 }
 
-// ---------------------------------------------------------------------------
-// Starter prompts
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// BUBBLE RENDERING
+// ─────────────────────────────────────────────────────────────────
 
-function renderStarterPrompts() {
-  const container = document.createElement("div");
-  container.className = "chat-starter-prompts";
-  container.id = "starter-prompts";
-
-  const intro = document.createElement("p");
-  intro.style.cssText = "font-size:12px;color:var(--text-muted);margin-bottom:6px";
-  intro.textContent = "Try asking:";
-  container.appendChild(intro);
-
-  STARTER_PROMPTS.forEach(prompt => {
-    const btn = document.createElement("button");
-    btn.className = "starter-prompt";
-    btn.textContent = `"${prompt}"`;
-    btn.addEventListener("click", () => {
-      openChat();
-      sendMessage(prompt);
-    });
-    container.appendChild(btn);
-  });
-
-  chatMessages.appendChild(container);
+function appendUserBubble(text) {
+  const msgs = document.getElementById("chat-msgs");
+  if (!msgs) return;
+  const div = document.createElement("div");
+  div.className = "bubble bubble-user";
+  div.innerHTML = `
+    <div class="bubble-label" style="text-align:right">YOU</div>
+    <div class="bubble-text">${escapeHtml(text)}</div>
+  `;
+  msgs.appendChild(div);
+  scrollToBottom();
 }
 
-// ---------------------------------------------------------------------------
-// Public API — exposed as window.chatModule
-// ---------------------------------------------------------------------------
-
-function prefillQuery(text) {
-  if (!chatOpen) openChat();
-  chatInput.value = text;
-  chatInput.focus();
-  chatInput.dispatchEvent(new Event("input"));
+function appendThinking() {
+  const msgs = document.getElementById("chat-msgs");
+  if (!msgs) return document.createElement("div");
+  const div = document.createElement("div");
+  div.className = "bubble bubble-ai";
+  div.innerHTML = `
+    <div class="bubble-label">PAPER TRAIL AI</div>
+    <div class="thinking"><span></span><span></span><span></span></div>
+  `;
+  msgs.appendChild(div);
+  scrollToBottom();
+  return div;
 }
 
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
+function appendAIBubble(text, sources) {
+  const msgs = document.getElementById("chat-msgs");
+  if (!msgs) return;
+  const div = document.createElement("div");
+  div.className = "bubble bubble-ai";
 
-function escapeHTML(str) {
-  if (!str) return "";
-  return str
+  const sourcesHtml = buildSourcesHtml(sources);
+
+  div.innerHTML = `
+    <div class="bubble-label">PAPER TRAIL AI</div>
+    <div class="bubble-text">${renderMarkdown(text)}</div>
+    ${sourcesHtml ? `<div class="sources-row">${sourcesHtml}</div>` : ""}
+  `;
+  msgs.appendChild(div);
+  scrollToBottom();
+}
+
+function buildSourcesHtml(sources) {
+  if (!sources || sources.length === 0) return "";
+  return sources.map(src => {
+    if (src.efta_id) {
+      const url = src.url || `https://www.justice.gov/epstein/files/DataSet%20${src.dataset}/${src.efta_id}.pdf`;
+      const quoteText = src.quote ? `"${src.quote.slice(0, 72)}…"` : "";
+      return `
+        <a class="source-chip source-chip-doj" href="${url}" target="_blank" rel="noopener" title="Open DOJ document">
+          <span class="source-chip-id">${src.efta_id}</span>
+          <span class="source-chip-ds">Dataset ${src.dataset}</span>
+          ${quoteText ? `<span class="source-chip-quote">${escapeHtml(quoteText)}</span>` : ""}
+        </a>
+      `;
+    }
+    const label = src.source === "wikipedia" ? "Wikipedia"
+      : src.source === "court" ? "Court Docs"
+      : src.source === "epstein_overview" ? "EpsteinOverview"
+      : src.source === "doj_press" ? "DOJ Press"
+      : `[${src.index}] ${src.source}`;
+    const href = src.url || "#";
+    return `<a class="source-chip" href="${href}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+  }).join("");
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MARKDOWN RENDERER (minimal)
+// ─────────────────────────────────────────────────────────────────
+
+function renderMarkdown(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^---+$/gm, "<hr>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+    .replace(/^\s*[-*]\s+(.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/\n/g, "<br>")
+    .replace(/^(?!<[hup])(.+)/, "<p>$1")
+    .replace(/([^>])$/, "$1</p>");
+}
+
+function escapeHtml(s) {
+  return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
 
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
-document.addEventListener("DOMContentLoaded", () => {
-  chatPanel = document.getElementById("chat-panel");
-  chatMessages = document.getElementById("chat-messages");
-  chatInput = document.getElementById("chat-input");
-  chatSendBtn = document.getElementById("chat-send-btn");
-  chatToggleBtn = document.getElementById("chat-toggle-btn");
-
-  if (!chatPanel || !chatMessages || !chatInput || !chatSendBtn || !chatToggleBtn) {
-    console.error("Chat DOM elements not found");
-    return;
-  }
-
-  // Toggle button
-  chatToggleBtn.addEventListener("click", toggleChat);
-
-  // Close button inside panel header
-  const closeBtn = document.getElementById("chat-close-btn");
-  if (closeBtn) closeBtn.addEventListener("click", closeChat);
-
-  // Send on button click
-  chatSendBtn.addEventListener("click", () => sendMessage(chatInput.value));
-
-  // Send on Enter (Shift+Enter = newline)
-  chatInput.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(chatInput.value);
-    }
-  });
-
-  // Auto-resize textarea
-  chatInput.addEventListener("input", () => {
-    chatInput.style.height = "auto";
-    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
-  });
-
-  // Render starter prompts
-  renderStarterPrompts();
-
-  // Expose public API
-  window.chatModule = { prefillQuery, openChat, closeChat };
-});
+function scrollToBottom() {
+  const msgs = document.getElementById("chat-msgs");
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}

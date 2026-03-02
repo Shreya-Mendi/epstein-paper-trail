@@ -1,278 +1,504 @@
 /**
- * timeline.js — Horizontal scrollable timeline and people grid for Paper Trail.
+ * timeline.js — Paper Trail UI: section routing, network graph, timeline, drawer.
  *
- * Features:
- *  - Fetches events from GET /timeline and people from GET /people
- *  - Renders a horizontally scrollable timeline track
- *  - Filter buttons to show only specific consequence tiers
- *  - Clicking a card or person opens a profile panel
+ * Sections: hero, problem, network, timeline, findings, model
+ * Network: force-directed canvas graph with consequence-tier coloring
+ * Timeline: filtered event list with animation
+ * Drawer: per-person profile with timeline events
  */
 
-const API_BASE = "http://127.0.0.1:8000";
+const API = "http://127.0.0.1:8000";
 
-const TIER_LABELS = {
-  0: "Charged/Convicted",
-  1: "Settled Civilly",
-  2: "Named/Investigated Only",
-  3: "No Consequences",
-};
+const TIER_COLORS = { 0: "#e63946", 1: "#f4a261", 2: "#e9c46a", 3: "#6c757d" };
+const TIER_NAMES  = { 0: "CHARGED / CONVICTED", 1: "SETTLED CIVILLY", 2: "NAMED / INVESTIGATED", 3: "NO CONSEQUENCES" };
+const TIER_LABELS = { 0: "Charged/Convicted", 1: "Settled Civilly", 2: "Named/Investigated", 3: "No Consequences" };
 
-const TIER_COLORS = {
-  0: "#e63946",
-  1: "#f4a261",
-  2: "#e9c46a",
-  3: "#6c757d",
-};
-
-let allEvents = [];
 let allPeople = [];
-let activeFilter = "all";
+let allEvents = [];
+let activeNetworkTier = "all";
+let activeTimelineTier = "all";
+let networkFilter = "all";
+let hoveredNode = null;
+let nodes = [];
+let rafId = null;
 
-// ---------------------------------------------------------------------------
-// API calls
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// SECTION ROUTING
+// ─────────────────────────────────────────────────────────────────
 
-async function fetchTimeline() {
-  try {
-    const res = await fetch(`${API_BASE}/timeline`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.error("Failed to fetch timeline:", err);
-    return getFallbackEvents();
+function showSection(id) {
+  document.querySelectorAll(".section-hero, .section-inner").forEach(s => s.classList.remove("active"));
+  const el = document.getElementById(id);
+  if (el) el.classList.add("active");
+
+  document.querySelectorAll(".nav-link").forEach(l => {
+    l.classList.toggle("active", l.dataset.section === id);
+  });
+
+  const fab = document.getElementById("chat-fab");
+  if (fab) fab.classList.toggle("hidden", id === "hero");
+
+  if (id === "network" && allPeople.length > 0 && nodes.length === 0) {
+    setTimeout(initNetwork, 100);
   }
+
+  window.scrollTo(0, 0);
 }
+
+window.showSection = showSection;
+
+document.querySelectorAll(".nav-link").forEach(btn => {
+  btn.addEventListener("click", () => showSection(btn.dataset.section));
+});
+
+document.getElementById("nav-ai-btn")?.addEventListener("click", openChat);
+document.getElementById("chat-fab")?.addEventListener("click", openChat);
+
+// ─────────────────────────────────────────────────────────────────
+// DATA LOADING
+// ─────────────────────────────────────────────────────────────────
 
 async function fetchPeople() {
   try {
-    const res = await fetch(`${API_BASE}/people`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.error("Failed to fetch people:", err);
-    return [];
+    const r = await fetch(`${API}/people`);
+    allPeople = await r.json();
+  } catch (e) {
+    allPeople = [];
+    console.warn("Could not fetch people:", e);
   }
 }
 
-async function fetchPerson(name) {
+async function fetchTimeline() {
   try {
-    const res = await fetch(`${API_BASE}/person/${encodeURIComponent(name)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.error("Failed to fetch person:", err);
+    const r = await fetch(`${API}/timeline`);
+    allEvents = await r.json();
+  } catch (e) {
+    allEvents = [];
+  }
+}
+
+async function fetchPersonProfile(name) {
+  try {
+    const r = await fetch(`${API}/person/${encodeURIComponent(name)}`);
+    return await r.json();
+  } catch (e) {
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Fallback data (used when backend is not running)
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// HERO STATS
+// ─────────────────────────────────────────────────────────────────
 
-function getFallbackEvents() {
-  return [
-    { date: "2008-06-30", person: "Jeffrey Epstein", event: "Epstein pleads guilty to Florida state charges.", tier: 0 },
-    { date: "2019-07-06", person: "Jeffrey Epstein", event: "Epstein arrested on federal sex trafficking charges.", tier: 0 },
-    { date: "2019-07-12", person: "Alexander Acosta", event: "Acosta resigns as Secretary of Labor.", tier: 2 },
-    { date: "2019-08-10", person: "Jeffrey Epstein", event: "Epstein found dead in MCC New York.", tier: 0 },
-    { date: "2020-07-02", person: "Ghislaine Maxwell", event: "Maxwell arrested in New Hampshire.", tier: 0 },
-    { date: "2021-12-29", person: "Ghislaine Maxwell", event: "Maxwell convicted on five federal counts.", tier: 0 },
-    { date: "2022-02-15", person: "Prince Andrew", event: "Prince Andrew settles civil lawsuit.", tier: 1 },
-    { date: "2022-06-28", person: "Ghislaine Maxwell", event: "Maxwell sentenced to 20 years.", tier: 0 },
-    { date: "2024-01-03", person: "Multiple", event: "Court unseals documents naming associates.", tier: 2 },
-  ];
+function populateHeroStats() {
+  const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  allPeople.forEach(p => { if (counts[p.tier] !== undefined) counts[p.tier]++; });
+  document.getElementById("stat-convicted").textContent = counts[0];
+  document.getElementById("stat-settled").textContent   = counts[1];
+  document.getElementById("stat-named").textContent     = counts[2];
+  document.getElementById("stat-none").textContent      = counts[3];
+
+  // Findings: % with no meaningful consequences (tier 2 + 3)
+  const noAction = counts[2] + counts[3];
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const pct = total > 0 ? Math.round((noAction / total) * 100) : 0;
+  const el = document.getElementById("finding-pct");
+  if (el) el.textContent = pct + "%";
 }
 
-// ---------------------------------------------------------------------------
-// Rendering
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// NETWORK — force-directed canvas graph
+// ─────────────────────────────────────────────────────────────────
 
-function formatDate(dateStr) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00Z");
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+function initNetwork() {
+  const canvas = document.getElementById("network-canvas");
+  if (!canvas) return;
+  const wrapper = canvas.parentElement;
+  canvas.width  = wrapper.offsetWidth;
+  canvas.height = wrapper.offsetHeight;
+  const W = canvas.width, H = canvas.height;
+
+  nodes = allPeople.map((p, i) => ({
+    id: i,
+    name: p.name,
+    tier: p.tier,
+    color: TIER_COLORS[p.tier] || "#6c757d",
+    x: W / 2 + (Math.random() - 0.5) * W * 0.55,
+    y: H / 2 + (Math.random() - 0.5) * H * 0.55,
+    vx: 0, vy: 0,
+    radius: p.tier === 0 ? 14 : p.tier === 1 ? 11 : 9,
+    fixed: false,
+  }));
+
+  // Pin Epstein at center
+  const epstein = nodes.find(n => n.name.toLowerCase().includes("epstein"));
+  if (epstein) { epstein.x = W / 2; epstein.y = H / 2; epstein.radius = 18; epstein.fixed = true; }
+
+  startPhysics();
 }
 
-function tierBadgeHTML(tier) {
-  const color = TIER_COLORS[tier] ?? "#888";
-  const label = TIER_LABELS[tier] ?? "Unknown";
-  return `<span class="tier-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${label}</span>`;
-}
-
-function renderTimeline(events) {
-  const track = document.getElementById("timeline-track");
-  if (!track) return;
-  track.innerHTML = "";
-
-  const filtered = activeFilter === "all"
-    ? events
-    : events.filter(e => String(e.tier) === String(activeFilter));
-
-  if (filtered.length === 0) {
-    track.innerHTML = `<p style="color:var(--text-muted);padding:20px">No events match this filter.</p>`;
-    return;
+function startPhysics() {
+  if (rafId) cancelAnimationFrame(rafId);
+  let ticks = 0;
+  function step() {
+    if (ticks < 200) { applyForces(); ticks++; }
+    drawNetwork();
+    rafId = requestAnimationFrame(step);
   }
+  rafId = requestAnimationFrame(step);
+}
 
-  filtered.forEach(event => {
-    const color = TIER_COLORS[event.tier] ?? "#888";
-    const card = document.createElement("div");
-    card.className = "timeline-card";
-    card.style.setProperty("--tier-color", color);
-    card.innerHTML = `
-      <div class="card-date">${formatDate(event.date)}</div>
-      <div class="card-person">${escapeHTML(event.person)}</div>
-      <div class="card-event">${escapeHTML(event.event)}</div>
-      ${tierBadgeHTML(event.tier)}
-    `;
-    card.addEventListener("click", () => openProfilePanel(event.person));
-    track.appendChild(card);
+function applyForces() {
+  const canvas = document.getElementById("network-canvas");
+  if (!canvas) return;
+  const W = canvas.width, H = canvas.height;
+
+  nodes.forEach(n => {
+    if (n.fixed || !isVisible(n)) return;
+    // Gravity toward center
+    n.vx += (W / 2 - n.x) * 0.003;
+    n.vy += (H / 2 - n.y) * 0.003;
+    // Repulsion
+    nodes.forEach(m => {
+      if (m === n) return;
+      const dx = n.x - m.x, dy = n.y - m.y;
+      const d2 = dx * dx + dy * dy || 1;
+      const dist = Math.sqrt(d2);
+      const minD = n.radius + m.radius + 28;
+      if (dist < minD) {
+        const f = (minD - dist) / dist * 0.12;
+        n.vx += dx * f; n.vy += dy * f;
+      }
+    });
+    n.vx *= 0.85; n.vy *= 0.85;
+    n.x = Math.max(n.radius, Math.min(W - n.radius, n.x + n.vx));
+    n.y = Math.max(n.radius, Math.min(H - n.radius, n.y + n.vy));
   });
 }
 
-function renderPeopleGrid(people) {
-  const grid = document.getElementById("people-grid");
-  if (!grid) return;
-  grid.innerHTML = "";
+function isVisible(n) {
+  return networkFilter === "all" || String(n.tier) === networkFilter;
+}
 
-  const filtered = activeFilter === "all"
-    ? people
-    : people.filter(p => String(p.tier) === String(activeFilter));
+function drawNetwork() {
+  const canvas = document.getElementById("network-canvas");
+  if (!canvas || nodes.length === 0) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
 
-  if (filtered.length === 0) {
-    grid.innerHTML = `<p style="color:var(--text-muted)">No individuals match this filter.</p>`;
-    return;
+  const epstein = nodes.find(n => n.name.toLowerCase().includes("epstein"));
+
+  // Edges from Epstein to all
+  if (epstein) {
+    nodes.forEach(n => {
+      if (n === epstein) return;
+      const alpha = isVisible(n) ? 0.05 : 0.01;
+      ctx.beginPath();
+      ctx.moveTo(epstein.x, epstein.y);
+      ctx.lineTo(n.x, n.y);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    });
   }
 
+  // Nodes
+  nodes.forEach(n => {
+    const visible = isVisible(n);
+    const isHov = n === hoveredNode;
+    ctx.save();
+    ctx.globalAlpha = visible ? (isHov ? 1 : 0.85) : 0.1;
+
+    if (isHov) { ctx.shadowColor = n.color; ctx.shadowBlur = 22; }
+
+    // Fill
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+    ctx.fillStyle = n.color;
+    ctx.fill();
+
+    // Ring
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = n.color;
+    ctx.globalAlpha = visible ? (isHov ? 0.5 : 0.12) : 0.05;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Label
+    if (visible && (isHov || n.radius >= 14)) {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#e8e8e8";
+      ctx.font = `${isHov ? 600 : 500} 11px 'Space Grotesk', sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const lastName = n.name.split(" ").slice(-1)[0];
+      ctx.fillText(lastName, n.x, n.y - n.radius - 5);
+    }
+
+    ctx.restore();
+  });
+}
+
+// Mouse events
+const canvasEl = document.getElementById("network-canvas");
+const tooltipEl = document.getElementById("network-tooltip");
+
+canvasEl?.addEventListener("mousemove", e => {
+  if (!canvasEl) return;
+  const rect = canvasEl.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvasEl.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvasEl.height / rect.height);
+
+  hoveredNode = null;
+  for (const n of nodes) {
+    const dx = n.x - mx, dy = n.y - my;
+    if (Math.sqrt(dx * dx + dy * dy) < n.radius + 8) { hoveredNode = n; break; }
+  }
+  if (hoveredNode && tooltipEl) {
+    tooltipEl.style.display = "block";
+    tooltipEl.style.left = (e.clientX - canvasEl.getBoundingClientRect().left + 14) + "px";
+    tooltipEl.style.top  = (e.clientY - canvasEl.getBoundingClientRect().top  - 14) + "px";
+    tooltipEl.innerHTML  = `<strong style="color:${hoveredNode.color}">${hoveredNode.name}</strong><br>${TIER_LABELS[hoveredNode.tier]}`;
+    canvasEl.style.cursor = "pointer";
+  } else {
+    if (tooltipEl) tooltipEl.style.display = "none";
+    canvasEl.style.cursor = "grab";
+  }
+});
+
+canvasEl?.addEventListener("click", () => {
+  if (hoveredNode) openDrawer(hoveredNode.name);
+});
+
+canvasEl?.addEventListener("mouseleave", () => {
+  if (tooltipEl) tooltipEl.style.display = "none";
+  hoveredNode = null;
+});
+
+// Filter chips
+document.querySelectorAll(".fchip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".fchip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    networkFilter = btn.dataset.tier;
+    activeNetworkTier = networkFilter;
+    renderPeopleStrip();
+  });
+});
+
+// Search
+document.getElementById("network-search")?.addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll(".person-card").forEach(card => {
+    const name = card.querySelector(".person-card-name")?.textContent.toLowerCase() || "";
+    card.classList.toggle("hidden", q.length > 0 && !name.includes(q));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// PEOPLE STRIP
+// ─────────────────────────────────────────────────────────────────
+
+function renderPeopleStrip() {
+  const strip = document.getElementById("people-strip");
+  if (!strip) return;
+  const filtered = activeNetworkTier === "all"
+    ? allPeople
+    : allPeople.filter(p => String(p.tier) === activeNetworkTier);
+
+  strip.innerHTML = "";
   filtered.forEach(person => {
-    const color = TIER_COLORS[person.tier] ?? "#888";
-    const initials = person.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
     const card = document.createElement("div");
     card.className = "person-card";
-    card.style.setProperty("--tier-color", color);
+    card.style.setProperty("--tier-color", TIER_COLORS[person.tier] || "#6c757d");
     card.innerHTML = `
-      <div class="person-photo-placeholder" style="border-color:${color}">${initials}</div>
-      <div class="person-name">${escapeHTML(person.name)}</div>
-      ${tierBadgeHTML(person.tier)}
-      <button class="person-ask-btn" style="--tier-color:${color}">
-        Ask about ${escapeHTML(person.name.split(" ")[0])} →
-      </button>
+      <div class="person-card-tier">${TIER_NAMES[person.tier] || "UNKNOWN"}</div>
+      <div class="person-card-name">${person.name}</div>
+      <div class="person-card-consequence">${TIER_LABELS[person.tier] || ""}</div>
     `;
-    card.addEventListener("click", () => openProfilePanel(person.name));
-    card.querySelector(".person-ask-btn").addEventListener("click", (e) => {
-      e.stopPropagation();
-      window.chatModule?.prefillQuery(`What happened to ${person.name}?`);
-    });
-    grid.appendChild(card);
+    card.addEventListener("click", () => openDrawer(person.name));
+    strip.appendChild(card);
   });
 }
 
-// ---------------------------------------------------------------------------
-// Profile panel
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// TIMELINE
+// ─────────────────────────────────────────────────────────────────
 
-async function openProfilePanel(name) {
-  if (!name || name === "Multiple") return;
+function renderTimeline(tier = "all") {
+  const track = document.getElementById("timeline-track");
+  if (!track) return;
+  const events = tier === "all" ? allEvents : allEvents.filter(e => String(e.tier) === tier);
+  track.innerHTML = "";
 
-  const panel = document.getElementById("profile-panel");
-  if (!panel) return;
-  panel.classList.remove("hidden");
+  events.forEach((ev, i) => {
+    const color = TIER_COLORS[ev.tier] || "#6c757d";
+    const div = document.createElement("div");
+    div.className = "tl-event";
+    div.style.setProperty("--event-color", color);
+    div.style.animationDelay = `${i * 50}ms`;
+    div.innerHTML = `
+      <div class="tl-date">${formatDate(ev.date)}</div>
+      <div class="tl-person">${ev.person}</div>
+      <div class="tl-text">${ev.event}</div>
+      <div class="tl-tier-badge">${TIER_LABELS[ev.tier] || ""}</div>
+    `;
+    track.appendChild(div);
+  });
 
-  const content = document.getElementById("profile-panel-content");
-  content.innerHTML = `<p style="color:var(--text-muted)">Loading…</p>`;
+  if (events.length === 0) {
+    track.innerHTML = `<p style="color:var(--text-3);font-family:var(--mono);font-size:12px;padding:20px 0">No events for this tier.</p>`;
+  }
+}
 
-  const data = await fetchPerson(name);
+document.querySelectorAll(".tl-fchip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tl-fchip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTimelineTier = btn.dataset.tier;
+    renderTimeline(activeTimelineTier);
+  });
+});
+
+function formatDate(d) {
+  if (!d) return "";
+  try {
+    const dt = new Date(d + "T12:00:00");
+    const opts = { year: "numeric", month: "long" };
+    if (!d.endsWith("-01")) opts.day = "numeric";
+    return dt.toLocaleDateString("en-US", opts);
+  } catch (e) { return d; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PROFILE DRAWER
+// ─────────────────────────────────────────────────────────────────
+
+async function openDrawer(name) {
+  const overlay = document.getElementById("drawer-overlay");
+  const body = document.getElementById("drawer-body");
+  if (!overlay || !body) return;
+
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  body.innerHTML = `<div class="loading-dots-wrap"><span></span><span></span><span></span></div>`;
+
+  const data = await fetchPersonProfile(name);
   if (!data) {
-    content.innerHTML = `<p style="color:var(--tier-0)">Could not load profile.</p>`;
+    body.innerHTML = `<p style="color:var(--text-3)">Could not load profile.</p>`;
     return;
   }
 
-  const color = TIER_COLORS[data.tier] ?? "#888";
-  const initials = data.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const eventsHTML = (data.timeline_events || []).map(e => `
-    <div class="profile-event">
-      <div class="event-date">${formatDate(e.date)}</div>
-      <div class="event-text">${escapeHTML(e.event)}</div>
-    </div>
-  `).join("") || `<p style="color:var(--text-muted);font-size:12px">No events on record.</p>`;
+  const tier = data.tier ?? 3;
+  const color = TIER_COLORS[tier] || "#6c757d";
+  const tierLabel = TIER_LABELS[tier] || "Unknown";
+  const events = data.timeline_events || [];
 
-  content.innerHTML = `
-    <div class="profile-header">
-      <div class="person-photo-placeholder" style="width:56px;height:56px;font-size:22px;border-color:${color}">${initials}</div>
-      <div>
-        <div class="profile-name">${escapeHTML(data.name)}</div>
-        ${tierBadgeHTML(data.tier)}
-      </div>
+  // Hex to rgb for rgba usage
+  const hexToRgb = hex => {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return `${r},${g},${b}`;
+  };
+  const rgb = hexToRgb(color);
+
+  const eventsHtml = events.length > 0 ? `
+    <div class="profile-section-label">RELATED EVENTS</div>
+    <div class="profile-events">
+      ${events.map(e => `
+        <div class="profile-event">
+          <div class="profile-event-date">${formatDate(e.date)}</div>
+          <div class="profile-event-text">${e.event}</div>
+        </div>
+      `).join("")}
     </div>
-    <div>
-      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:12px">Timeline</h3>
-      <div class="profile-events">${eventsHTML}</div>
+  ` : "";
+
+  const tierDesc = {
+    0: "Faced criminal charges or conviction.",
+    1: "Settled out of court civilly — avoided criminal liability.",
+    2: "Named in documents or investigated. No charges were ever filed.",
+    3: "No known legal consequences despite documented associations.",
+  }[tier] || "";
+
+  body.innerHTML = `
+    <div class="profile-tier-badge" style="color:${color};border-color:${color}">${TIER_NAMES[tier]}</div>
+    <div class="profile-name">${data.name}</div>
+    <div class="profile-consequence">${tierLabel}</div>
+
+    ${data.bio ? `
+      <div class="profile-section-label">BACKGROUND</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.65;margin-bottom:28px">${data.bio}</p>
+    ` : ""}
+
+    ${eventsHtml}
+
+    <div class="profile-section-label">CONSEQUENCE VERDICT</div>
+    <div style="background:rgba(${rgb},0.07);border:1px solid rgba(${rgb},0.25);padding:16px 20px;margin-bottom:20px">
+      <div style="color:${color};font-family:var(--mono);font-size:10px;letter-spacing:0.12em;margin-bottom:6px">TIER ${tier}</div>
+      <strong style="color:${color};font-size:15px">${tierLabel}</strong>
+      <p style="color:var(--text-2);font-size:13px;margin-top:8px;line-height:1.6">${tierDesc}</p>
     </div>
-    <button onclick="window.chatModule?.prefillQuery('What happened to ${escapeJS(data.name)}?')"
-      style="padding:10px 16px;background:${color}22;border:1px solid ${color}44;color:${color};
-             font-family:var(--font-mono);font-size:12px;border-radius:4px;cursor:pointer;text-align:left">
-      Ask about ${escapeHTML(data.name.split(" ")[0])} →
+
+    <button class="ask-ai-btn" onclick="window._askAboutPerson('${data.name.replace(/'/g, "\\'")}')">
+      Ask AI about ${data.name.split(" ").slice(-1)[0]} →
     </button>
   `;
 }
 
-function closeProfilePanel() {
-  const panel = document.getElementById("profile-panel");
-  if (panel) panel.classList.add("hidden");
+window._askAboutPerson = function(name) {
+  closeDrawer();
+  openChat();
+  setTimeout(() => {
+    const input = document.getElementById("chat-input");
+    if (input) { input.value = `What do the documents say about ${name}?`; input.focus(); }
+  }, 300);
+};
+
+document.getElementById("drawer-close")?.addEventListener("click", closeDrawer);
+document.getElementById("drawer-overlay")?.addEventListener("click", e => {
+  if (e.target === document.getElementById("drawer-overlay")) closeDrawer();
+});
+
+function closeDrawer() {
+  document.getElementById("drawer-overlay")?.classList.add("hidden");
+  document.body.style.overflow = "";
 }
 
-// ---------------------------------------------------------------------------
-// Filter buttons
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// CHAT HELPERS
+// ─────────────────────────────────────────────────────────────────
 
-function setupFilters() {
-  document.querySelectorAll(".filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      activeFilter = btn.dataset.tier ?? "all";
-      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      renderTimeline(allEvents);
-      renderPeopleGrid(allPeople);
-    });
-  });
+function openChat() {
+  document.getElementById("chat-overlay")?.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => document.getElementById("chat-input")?.focus(), 150);
 }
+window.openChat = openChat;
 
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
-
-function escapeHTML(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function sendPrompt(text) {
+  openChat();
+  setTimeout(() => {
+    const input = document.getElementById("chat-input");
+    if (input) {
+      input.value = text;
+      input.dispatchEvent(new Event("input"));
+      document.getElementById("chat-send-btn")?.click();
+    }
+  }, 200);
 }
+window.sendPrompt = sendPrompt;
 
-function escapeJS(str) {
-  if (!str) return "";
-  return str.replace(/'/g, "\\'");
-}
+// ─────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
-async function initTimeline() {
-  setupFilters();
-
-  [allEvents, allPeople] = await Promise.all([fetchTimeline(), fetchPeople()]);
-
-  renderTimeline(allEvents);
-  renderPeopleGrid(allPeople);
-
-  // Profile panel close button
-  const closeBtn = document.getElementById("profile-close-btn");
-  if (closeBtn) closeBtn.addEventListener("click", closeProfilePanel);
-
-  // Close profile on backdrop click
-  const panel = document.getElementById("profile-panel");
-  if (panel) {
-    panel.addEventListener("click", e => {
-      if (e.target === panel) closeProfilePanel();
-    });
-  }
-}
-
-document.addEventListener("DOMContentLoaded", initTimeline);
+(async function init() {
+  await Promise.all([fetchPeople(), fetchTimeline()]);
+  populateHeroStats();
+  renderPeopleStrip();
+  renderTimeline("all");
+  // Network graph initializes lazily on first visit to section
+})();
