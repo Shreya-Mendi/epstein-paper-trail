@@ -38,8 +38,15 @@ function showSection(id) {
   const fab = document.getElementById("chat-fab");
   if (fab) fab.classList.toggle("hidden", id === "hero");
 
-  if (id === "network" && allPeople.length > 0 && nodes.length === 0) {
-    setTimeout(initNetwork, 100);
+  if (id === "network") {
+    renderPeopleStrip();
+    if (allPeople.length > 0 && nodes.length === 0) {
+      setTimeout(initNetwork, 100);
+    }
+  }
+
+  if (id === "timeline") {
+    renderTimeline(activeTimelineTier);
   }
 
   window.scrollTo(0, 0);
@@ -337,7 +344,7 @@ function renderTimeline(tier = "all") {
   events.forEach((ev, i) => {
     const color = TIER_COLORS[ev.tier] || "#6c757d";
     const div = document.createElement("div");
-    div.className = "tl-event";
+    div.className = "tl-event animate";
     div.style.setProperty("--event-color", color);
     div.style.animationDelay = `${i * 50}ms`;
     div.innerHTML = `
