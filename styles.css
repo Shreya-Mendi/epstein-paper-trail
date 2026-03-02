@@ -238,9 +238,10 @@ em { font-style: italic; color: var(--text); }
 /* ════════════════════════════════════════════════════
    NETWORK SECTION
    ════════════════════════════════════════════════════ */
+#network.section-inner { padding: 0; }
 .network-header {
   display: flex; align-items: flex-end; justify-content: space-between;
-  padding: 100px 64px 0; gap: 20px; flex-wrap: wrap; margin-bottom: 0;
+  padding: 100px 64px 32px; gap: 20px; flex-wrap: wrap; margin-bottom: 0;
 }
 .network-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .filter-group { display: flex; gap: 4px; }
@@ -321,6 +322,9 @@ em { font-style: italic; color: var(--text); }
 }
 .tl-event {
   position: relative; padding: 0 0 40px 32px;
+  opacity: 1;
+}
+.tl-event.animate {
   opacity: 0; transform: translateX(-6px);
   animation: tl-appear 0.4s forwards;
 }
