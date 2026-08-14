@@ -1,5 +1,7 @@
 # Paper Trail
 
+🔗 **Live demo:** [shreya-mendi.github.io/epstein-paper-trail/](https://shreya-mendi.github.io/epstein-paper-trail/)
+
 > *"The Documents Don't Lie"*
 
 Paper Trail is an NLP system that classifies legal consequences for individuals named in the Epstein case using entirely public documents. It features a RAG-based chatbot, a named entity recognition (NER) pipeline, consequence classification across four tiers, and a dark interactive timeline UI.
